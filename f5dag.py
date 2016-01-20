@@ -15,14 +15,13 @@ import socket
 import hashlib
 
 
-
 class Disaggregator():
     ''' encapsulates Disaggration functionality
             connects to url and retrieves JSON doc
             from the TMOS Controller
     '''
 
-    def __init__(self, directFlowMgr, url, logger ):
+    def __init__(self, directFlowMgr, url, logger):
         self.flowsAdded = 0
         self.flowsDeleted = 0
         self._directFlowMgr = directFlowMgr
@@ -49,8 +48,8 @@ class Disaggregator():
 
     def updateDag(self):
         ''' retrieves the Disaggregation JSON doc from TMOS'''
-        
-        if ( self._url == ''):
+
+        if (self._url == ''):
             data = self.loadDagFromFile()
         else:
             response = urllib2.urlopen(self._url)
@@ -58,17 +57,17 @@ class Disaggregator():
             data = json.loads(res)
 
         self._clusterMembers = data['clusterMembers']
-        self._monitorVlan = data['monitorVlan'] 
+        self._monitorVlan = data['monitorVlan']
         self._rules = data['rules']
         self._clusterMacAddr = self.parseClusterMacAddr()
-        
+
         return True
 
     def loadDagFromFile(self):
         '''load the Dissagregation data for testing purposes
             from the testsuite.json file
         '''
-        
+
         json_data = open('/mnt/flash/testsuite.json')
         data = json.load(json_data)
         return data
@@ -79,7 +78,7 @@ class Disaggregator():
 
     def parseClusterMacAddr(self):
         ''' parse the dissagregation JSON doc and return all
-            virtual mac addresses observed in a set 
+            virtual mac addresses observed in a set
         '''
         result = set()
         for data in self._rules:
@@ -175,8 +174,7 @@ class Disaggregator():
 
         for rule in self._rules:
             ruleif = forwardingTable[rule['action']['dl_src']]
-            name = hashlib.sha1(rule['id']+
-                                    ruleif).hexdigest() 
+            name = hashlib.sha1(rule['id'] + ruleif).hexdigest()
 
             if (name in self.installedFlows):
                 self.installedFlows.remove(name)
@@ -227,8 +225,8 @@ class Disaggregator():
 
 
 class MacHandler(eossdk.AgentHandler,
-             eossdk.MacTableHandler,
-             eossdk.FlowHandler):
+                 eossdk.MacTableHandler,
+                 eossdk.FlowHandler):
     ''' handles the mac address to port mapping
         and registers a callback to the sdk to be notified
         for changes of the virtual mac address of the Honeybee
@@ -244,14 +242,14 @@ class MacHandler(eossdk.AgentHandler,
 
         self.tmosUrl = 'http://10.20.1.10'
         self.syncInterval = 5
-        
+
         self.logger = Logmsg('f5dag')
         eossdk.FlowHandler.__init__(self, self.directFlowMgr)
         self.dag = Disaggregator(self.directFlowMgr, self.tmosUrl, self.logger)
         self.discoverCluster()
         eossdk.AgentHandler.__init__(self, self.agentMgr)
         eossdk.MacTableHandler.__init__(self, self.macTableMgr)
-        
+
         self.forwardingTable = dict.fromkeys(self.dag.getClusterMacAddr())
 
         self.logger.log('initializing F5 TMOS Disaggregator...')
@@ -261,9 +259,10 @@ class MacHandler(eossdk.AgentHandler,
         return self.syncInterval
 
     def sendDiscoverMessage(self, destIp):
-        ''' helper function to send udp messages to 
-        the cluster members, so that the fwd table will be
-        popluated'''
+        ''' helper function to send udp messages to
+            the cluster members, so that the fwd table will be
+            popluated
+        '''
 
         msg = 'sending Discovery Message for %s' % destIp
         self.logger.log(msg)
@@ -273,14 +272,11 @@ class MacHandler(eossdk.AgentHandler,
         self.message = 'F5 discovery'
         self.sock = socket.socket(socket.AF_INET,
                                   socket.SOCK_DGRAM)
-        self.sock.sendto(self.message,
-                         ( self._destIp, self._destPort))
+        self.sock.sendto(self.message, (self._destIp, self._destPort))
 
-
-    
     def discoverCluster(self):
         ''' will send each clusterIpAddresses a discovery
-            message 
+            message
         '''
         for address in self.dag.getClusterMembers():
             self.sendDiscoverMessage(address)
@@ -298,11 +294,9 @@ class MacHandler(eossdk.AgentHandler,
                     in self.forwardingTable and
                     macEntry.vlan_id() == self.dag.getMonitorVlan()):
                         foundClusterMacAddresses += 1
-                        self.forwardingTable[macEntry.eth_addr().
-                                       to_string()] = \
-                                       macEntry.intf().to_string()
-                        msg = 'updating entry for %s ' % \
-                            (macEntry.to_string())
+                        self.forwardingTable[macEntry.eth_addr().to_string()]=\
+                             macEntry.intf().to_string()
+                        msg = 'updating entry for %s ' % (macEntry.to_string())
                         self.logger.log(msg)
 
         if (foundClusterMacAddresses < len(self.forwardingTable)):
@@ -318,10 +312,11 @@ class MacHandler(eossdk.AgentHandler,
         return True
 
     def on_initialized(self):
-        ''' callback which will be executed after the SDK initalized'''
-        
-        # registers the Honeybee cluster virtual mac addresses to the
-        # on_mac_entry_set callback
+        ''' callback which will be executed after the SDK initalized
+            registers the Honeybee cluster virtual mac addresses to the
+            on_mac_entry_set callback
+        '''
+
         for fwdTableEntry in self.forwardingTable:
             msg = 'registering mac %s for on_mac_entry_set' % fwdTableEntry
             self.logger.log(msg)
@@ -342,10 +337,8 @@ class MacHandler(eossdk.AgentHandler,
             self.syncInterval = configSyncInterval
 
         self.updateControllerStatus('initializing...')
-        if (self.dag.syncDirectflows(self.forwardingTable, True)): 
+        if (self.dag.syncDirectflows(self.forwardingTable, True)):
             self.updateControllerStatus('connected')
-
-        
 
     def on_agent_option(self, optionName, value):
         ''' callback for Agent option changes'''
@@ -353,8 +346,8 @@ class MacHandler(eossdk.AgentHandler,
             if (optionName == 'tmosUrl'):
                 self.tmosUrl = value
                 self.dag.setUrl(self.tmosUrl)
-            elif (optionName == 'syncInterval'):
-                 self.syncInterval = value
+            elif(optionName == 'syncInterval'):
+                self.syncInterval = value
 
     def on_mac_entry_set(self, entry):
         ''' callback when the cluster mac address change
@@ -365,7 +358,8 @@ class MacHandler(eossdk.AgentHandler,
              entry.intf().to_string())
         self.logger.log(msg)
 
-        self.forwardingTable[entry.eth_addr().to_string()] = entry.intf().to_string()
+        self.forwardingTable[entry.eth_addr().to_string()] = \
+            entry.intf().to_string()
         self.dag.syncDirectflows(self.forwardingTable, False)
 
     def on_sync(self):
@@ -376,15 +370,17 @@ class MacHandler(eossdk.AgentHandler,
         else:
             self.updateControllerStatus('ERROR')
 
+
 class f5ClusterMacAddressesNotFound(Exception):
     ''' custom defined Exeption which gets
-        raised at startup when the cluster node 
+        raised at startup when the cluster node
         port connection cannot be learned from the
         MAC forwarding table. This usually is caused
         by a wiring problem
     '''
     def __str__(self):
         return 'MAC forwarding table does not contain cluster addresses'
+
 
 class Logmsg(object):
     ''' Wrapper to sent to stdout '''
@@ -414,7 +410,6 @@ class UpdateSheduler(eossdk.TimeoutHandler):
         self.poll()
         self.timeout_time_is(eossdk.now() + self._poll_interval)
 
- 
 
 def main(args):
     ''' Instanciating the Mac Handler and Disaggregator Object'''
